@@ -1,0 +1,1028 @@
+mer,
+Issues,accepted_code_change
+"There is one minor thing still missing in the new widget API, which is correct handling of widget areas without widgets. At the moment, widget areas via the new API and components are always rendered, regardless of whether they actually include active widgets. Widget areas should only be rendered if they include active widgets.
+
+This should both consider whether a widget area has widgets overall (this should be obvious), but also whether it has active widgets (i.e. if all widgets of an area return `null`, the widget area should be omitted as well).
+
+Follow-up to #1300 and #1678.
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+
+* A widget area via the new API should only be rendered if there are actual widgets to display inside it (i.e. **active widgets**).
+
+## Implementation Brief
+
+Edit `WidgetAreaRenderer` within `js/googlesitekit/widgets/components/WidgetAreaRenderer.js`
+
+* Return `null` if `widgets.length === 0`
+* Refactor `activeWidgets` to be handled directly within `WidgetAreaRenderer` without passing `activeWidgets` and `setActiveWidgets` to `WidgetRenderer`
+  * Replace use of `useState`, set value of `activeWidgets` using `widgets.filter( isActiveWidget )`
+    * See comment for `isActiveWidget` filter implementation: https://github.com/google/site-kit-wp/issues/2021#issuecomment-698894816
+* Return `null` if `activeWidgets.length === 0`
+* Modify `widgetClassNames` to account for `activeWidgets` being an array rather than an object
+  * Use `activeWidgets.length` within `[].fill( ... )` call
+  * Iterate over `activeWidgets` via `activeWidgets.forEach`
+    * Can safely remove conditional & early return that checks if active widget as array only includes active widgets
+* Modify `widgetOutput` to map over `activeWidgets` rather than `widgets`
+* Modify `widgetOutput`, remove `activeWidgets` and `setActiveWidgets` props from `WidgetRenderer` component
+
+
+Edit `WidgetRenderer` within `js/googlesitekit/widgets/components/WidgetRenderer.js`
+
+* Remove use and logic associated with `activeWidgets` & `setActiveWidgets`, there are 2 conditionals that call `setActiveWidgets` with early `null` returns, these are no longer necessary as non-active widgets are not rendered.
+
+## QA Brief
+
+* Activate Site Kit in a development build without the AdSense module active.
+* Prior to this fix, the **new** widget areas would include an empty ""Earnings"" area.
+* After this fix, the ""Earnings"" area should not be present because it doesn't include actual content.
+    * Activating AdSense should make the ""Earnings"" area appear again because now there _is_ content.
+
+## Changelog entry
+
+* Enhance new widget API so that only widget areas that have active widgets are rendered.
+","Refactor WidgetAreaRenderer and WidgetRenderer to only render area when there is an active widget.
+Remove unnecessary use of and replace with .
+Make use of rather than direct function call to fix class components.
+Extract from function definition to avoid re-defining every render.
+Pass to .
+Remove use of in favor of direct calls to fix error within Jest tests.
+Pass empty object to direct component renders.
+Merge branch 'develop' into enhancement/2021-only-render-widget-area-when-widgets.
+Abstract and refactor isActiveWidget component.
+Add test for widget area with no widgets, make sure return is explicitly boolean type.
+Clarify filtering active widgets utility function for readability.
+Merge branch 'develop' into enhancement/2021-only-render-widget-area-when-widgets."
+"Every Site Kit module's setup component should be registered via a new (optional) `setupComponent` argument which contains the component for the setup.
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+
+* The `registerModule` action in the `core/modules` store should receive a `setupComponent` argument that is optional and by default is set to a new `DefaultModuleSetup` component.
+* The `DefaultModuleSetup` should essentially render the skeleton that all existing setup components have, but nothing more (it's for now just an ""unused"" fallback but it should exist):
+    * It should render its output in a `<div className=""googlesitekit-setup-module googlesitekit-setup-module--{moduleSlug}"" />`.
+    * It should include a `<h2 className=""googlesitekit-heading-3 googlesitekit-setup-module__title"" />` containing the module title.
+    * It should include a `<form className=""googlesitekit-{moduleSlug}-setup__form"" onSubmit={ finishSetup } />`, containing only the `<div className=""googlesitekit-setup-module__action"" />` with the ""Confirm & Continue"" button.
+* The `SetupWrapper` component should be updated to rely on registered module setup components:
+    * It should be refactored to a functional component using hooks (except for relying on `global._googlesitekitLegacyData.setup.moduleToSetup` which shouldn't be refactored yet as part of this).
+    * Instead of the `googlesitekit.ModuleSetup-${ slug }` filter, it should rely on the registered module setup component via the `core/modules` store.
+    * The `onSettingsPage` and `isEditing` props should be removed from here.
+* All Site Kit modules that currently add their settings pages via the `googlesitekit.ModuleSetup-${ slug }` should instead rely on the `registerModule` action from the `core/modules` store, passing only the `setupComponent` for now.
+
+## Implementation Brief
+
+* Create `DefaultModuleSetup.js` in `js/googlesitekit/modules/components` and import it to `datastore/modules.js`
+* Add the implementation for `DefaultModuleSetup`details as described in the AC section.
+* Add the new `setupComponent` argument to the `registerModule` action with `DefaultModuleSetup` as the default value.
+* Refactor the `SetupWrapper` in `assets/js/components/setup/setup-wrapper.js` to a functional component using hooks:
+    * `getSiteKitAdminURL`  ==> `select('core/site').getAdminURL()`
+* Follow AC for the remainder of the items that require refactoring.
+* Update the modules to register their settings pages via the data store rather than the filter in the `index.js` files at the root of each module in`assets/js/modules`
+
+## QA Brief
+
+* General testing (components won't load at all if not set up) for several setup flows:
+  * AdSense
+  * Analytics
+  * Optimize
+  * TagManager
+* Verify no existence of `googlesitekit.ModuleSetup-${ slug }` in the codebase
+
+## Changelog entry
+
+* Allow registering a `setupComponent` when calling the `registerModule` action on the `core/modules` store.
+","Create default module setup component, refactor setup wrapper to be functional component, and add registerModule action.
+Implement settings pages via dispatch, modify stories to use .
+Remove unused import variables.
+Update prop types, pass page to , load/finish setup refactors, and use module object.
+Merge branch 'develop' into enhancement/2074-register-module-setup-components.
+Use moduleSlug prop, re-order registerModule calls, & fix stories.
+Merge branch 'develop' into enhancement/2074-register-module-setup-components.
+Merge branch 'develop' into enhancement/2074-register-module-setup-components.
+Merge branch 'develop' into enhancement/2074-register-module-setup-components
+Remove default value for setupComponent & skip rendering setup wrapper if setup component does not exist.
+Merge branch 'develop' into enhancement/2074-register-module-setup-components
+Fix merge issues.
+Merge branch 'develop' into enhancement/2074-register-module-setup-components.
+Merge branch 'develop' into enhancement/2074-register-module-setup-components
+Remove unnecessary call to old undefined function.
+Fix broken Analytics setup story."
+"Before we implemented proper entity detection in Site Kit (see #174), the single URL details view worked for any URL part of the site, or even URLs not part of the site for certain services that don't incorporate permission management (such as PageSpeed Insights).
+
+However, now the single URL details view relies on entity detection to find out more information of the ""entity"" based on the given URL. This means that, if a single URL details view is accessed, it can and should only provide meaningful results if an entity is detected.
+
+This issue should modify the single URL details view accordingly so that, if no current entity is available, a corresponding message is displayed, instead of still attempting to show data (for the new widgets, doing so would fall back to showing site-wide data, which would be just as irrelevant on that screen).
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+
+* On the single URL details view, if there is no current entity (e.g. if the `getCurrentEntityURL` selector of the `core/site` store returns `null`), the screen should show a corresponding message instead of all the regular UI:
+    * The ""Detailed Page Stats"" heading and the back link should be kept.
+    * The date range selector should not be there.
+    * The white box that would normally have the page title and URL should include the following message: _It looks like the URL %s is not part of this site, therefore there is no data available to display._ (`%s` should be the URL taken from the `permaLink` query parameter)
+    * Everything below that box should not be displayed.
+
+## Implementation Brief
+
+* Extract the inner Entity-dependent elements from `DashboardDetailsApp` into a new `DashboardDetailsEntityView` component in `assets/js/components/dashboard-details/`
+    - Starting from the `div` containing `<DateRangeSelector />`
+    - Ending with `<DashboardDetailsModules />`, inclusive
+* Add a new `DashboardDetailsEntityNotFoundView` component as a variant (but not copy of) of `DashboardDetailsEntityView`
+    - renders with the following title/url portion https://github.com/google/site-kit-wp/blob/f244c63925cd56d0bb03a048d0b387824c335fe5/assets/js/components/dashboard-details/dashboard-details-app.js#L85-L109
+        - The `h3` and `Link` components should be replaced by the message in the AC rendered as plain text (i.e. `<p>`):  
+        _It looks like the URL %s is not part of this site [...]_
+        - The URL in this block should be sourced from the full URL passed in the `permaLink` query parameter of `global.location.href`  
+* Update `DashboardDetailsApp` to conditionally render the appropriate component based on the value of `getCurrentEntityURL`
+    - This URL is provided from the server response so there is no resolver to wait for – it will be available immediately
+    - If `null`, render the `DashboardDetailsEntityNotFoundView`
+    - Otherwise, render the `DashboardDetailsEntityView`
+
+### Tests
+
+* Add storybook stories for the dashboard details view to render `DashboardDetailsApp` with stories for both
+    - A found Entity
+    - A not-found Entity
+* No Jest, E2E changes
+* No VRT changes expected
+
+_There are no stories for this view yet, so create a `stories/dashboard-details.stories.js` module for them_
+
+## QA Brief
+
+* Go to the following page: `/wp-admin/admin.php?page=googlesitekit-dashboard&permaLink=%2F404-page`
+* Make sure that you see everything that is listed in the AC
+
+## Changelog entry
+
+* Show an error message if the URL for the single URL detail view cannot be identified as part of the site.
+","Move entity related elements into DashboardDetailsEntityView component.
+Add DashboardDetailsEntityNotFoundView component and integrated it into DashboardDetails.
+Update DashboardDetailsEntityNotFoundView component to correctly display error message.
+Add basic storybook section for dashboard details page.
+Rename url prop to be permalink.
+Add a storybook for an existing entity.
+Merge remote-tracking branch 'origin/develop' into bug/2001-error-on-single-url.
+Merge branch 'develop' into bug/2001-error-on-single-url
+Update DashboardDetailsEntityNotFoundView to use getQueryArg function.
+Update dashboard details stories.
+Merge remote-tracking branch 'origin/develop' into bug/2001-error-on-single-url.
+Ensure no link is displayed in DashboardDetailsEntityNotFoundView.
+Handle permaLink query parameter centralized via core/site datastore.
+Fix dashboard-details Storybook, mainly focusing on header content for now.
+Merge branch 'develop' into bug/2001-error-on-single-url.
+Merge branch 'develop' into bug/2001-error-on-single-url."
+"Bug Description
+
+The E2E tests produce a lot of ""junk"" output when running because they have intentional/expected errors that result in `console.error` calls. Jest forwards all console output to the terminal, which results in really noisy test runs where things _look_ like they're not working when in fact they are (see screenshot below).
+
+We should silence expected console output (such as `Failed to load resource: the server responded with a status`) so only relevant errors make it to the console when running the tests.
+
+## Steps to reproduce
+
+<!-- Please provide detailed steps on how to reproduce the bug. -->
+1. Run the E2E tests (`npm run test:e2e`)
+2. Observe noisy console output
+
+## Screenshots
+
+<img width=""673"" alt=""Screenshot 2019-11-12 at 17 36 18"" src=""https://user-images.githubusercontent.com/90871/68695436-f26f1c00-0572-11ea-9f24-9e1991c8b1ab.png"">
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+
+* All e2e tests that result in error logs in the console should be updated so that the console is muted for the specific test.
+* The console should _not_ be muted generally throughout all tests, as that would increase our chance of missing problems in a test. It therefore should be done on case-by-case basis.
+
+## Implementation Brief
+
+* Add `'@wordpress/jest-console'` into the `setupFilesAfterEnv` array in `tests/e2e/jest.config.js`
+* Update all debugging `console` calls in `config/bootstrap.js` to use `console.debug` instead
+* Update E2E tests with the necessary assertions to `expect( console ).` `toHaveErrored`, `toHaveWarned`, `toHaveLogged`.
+	- Any of the above messages which are not necessarily expected, but are not relevant can be filtered out and ignored by adding cases for them in the `observeConsoleLogging` function in `bootstrap.js`  
+	E.g. React notices, cookie notices, or anything which is more/less unrelated to our tests ([one example where this may be relevant for WP](https://github.com/WordPress/gutenberg/blob/5ced7f1ab18d6019da01f2cb812697ddde8837b7/packages/e2e-tests/config/setup-test-framework.js#L139-L145))
+
+## QA Brief
+
+* E2E tests should produce no extra output when run as shown above (unless there is a legitimate error or failed assertion)
+
+## Changelog entry
+
+* N/A
+","Add wordpress/jest-console to setupFilesAfterEnv.
+Ignore several messages from e2e tests that do not impact their results.
+Add expectations for test console notifications.
+Merge branch 'develop' into enhancement/842-silence-e2e-console-noise.
+Update e2e console notification expectations per TravisCI.
+Stub batch requests in Optimize test.
+Update console expectations.
+Stub batch requests in admin-tracking.test.
+Stub batch requests in several tests.
+Update api path in test.
+Update stub request path.
+Merge remote-tracking branch 'origin/develop' into enhancement/842-silence-e2e-console-noise.
+Downgrade severity of unknown response key.
+Update webpack config to allow feature flag mode override.
+Ignore React state update on unmounted component warnings in E2E.
+Replace 404 with live container version fixture.
+Remove toHaveErrored assertions in GTM setup test.
+Update intercepted requests in PageSpeed activation test.
+Ignore React strict mode warnings in E2E.
+Keep pageerror mapped to console.error.
+Add batch request stub to gcp-flow test and remove expected warnings.
+Add batch request stub to notifications test and remove expected warnings.
+Annotate expected errors in E2E tests.
+Ensure button is not disabled before clicking.
+Debug API error.
+Merge remote-tracking branch 'origin/develop' into enhancement/842-silence-e2e-console-noise.
+Merge remote-tracking branch 'origin/develop' into enhancement/842-silence-e2e-console-noise.
+Revert ""Debug API error.""
+
+This reverts commit 126d76ed584d359db76f08e4eb1495aa01d10094.
+Update flag-mode option case in comment.
+Remove unconditional debug logging of non-successful responses."
+"The splash screen should receive the new UI design previously created.
+
+<img width=""717"" alt=""Screenshot 2020-09-15 at 17 18 14"" src=""https://user-images.githubusercontent.com/3531426/93277748-75569980-f777-11ea-9224-82ada15fc978.png"">
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+
+* If the `featureFlags.userInput` is enabled, the Site Kit splash screen UI should be modified to look like [this](https://www.figma.com/file/K4MXDvLRULqRRz2zpMlh5e/SiteKit---Phase-1%3A-Onboarding?node-id=1098%3A17463). (Otherwise, the current UI should be displayed.)
+* The copy for all cases except the `else` case in the current `SetupProxy` component should be maintained, except that the button should _always_ say ""Sign in with Google"". Only for the `else` case the copy from the new design should be used.
+    * Let's also fix a somewhat off description here for the `revoked` case, it shouldn't say `click ""Start Setup""`, it should say `click ""Sign in with Google""`, because there is no ""Start Setup"" button.
+
+## Implementation Brief
+
+ <!-- One or more bullet points for how to technically implement the feature. -->
+In the [SetupUsingProxy component:](https://github.com/google/site-kit-wp/blob/develop/assets/js/components/setup/setup-proxy.js)
+ - add the `classnames` package as external dependency. `import classnames from 'classnames';`
+ - import the `SvgIcon` component from ../../util. `import { SvgIcon, trackEvent } from '../../util';`
+ - set `startSetupText` as a constant which will have the following value: ""**Sign in with Google**"" and remove the `startSetupText` variable from the conditions.
+ - update the description for the ""revoked"" condition to: ""**Site Kit will no longer have access to your account. If you’d like to reconnect Site Kit, click ""_Sign in with Google_"" below to generate new credentials.**""
+ - update the title and description for the else condition to the following:
+ -- title: ""**Set up Site Kit**""
+ -- description: ""**Get insights about how people find and use your site, how to improve and monetize your content, directly in your WordPress dashboard**""
+ - add the following markup for the walking person image just after the `.mdc-layout-grid__inner` element. The image should be previously be exported as a SVG in the `/assets/svg/` folder.
+```
+{ featureFlags.widgets.userInput.enabled && (
+		<div
+			className=""
+				googlesitekit-wizard-progress__icon
+				mdc-layout-grid__cell
+				mdc-layout-grid__cell--span-12-tablet
+				mdc-layout-grid__cell--span-6-desktop
+			""
+		>
+			<SvgIcon id=""person-walking"" width=""570"" height=""337"" />
+		</div>
+	) }
+```
+ - update the following markup `<div className=""mdc-layout-grid__cell mdc-layout-grid__cell--span-12"">` to conditionally load the appropriate class names using the classnames function. If `featureFlags.userInput` is enabled, the class names should be `mdc-layout-grid__cell mdc-layout-grid__cell--span-6-desktop`.
+```
+<div
+	className={ classnames(
+		'mdc-layout-grid__cell',
+		'mdc-layout-grid__cell--span-12-tablet',
+		{
+			'mdc-layout-grid__cell--span-6-desktop': featureFlags.widgets.userInput.enabled,
+		}
+	) }
+>
+```
+
+In `/assets/sass/components/wizard/_googlesitekit-wizard-progress.scss`, add the following markup:
+```
+.googlesitekit-wizard-progress__icon {
+	text-align: center;
+
+	svg {
+		height: auto;
+		max-width: 100%;
+	}
+
+	@media (min-width: $bp-desktop) {
+		order: 2;
+	}
+}
+```
+
+
+
+## QA Brief
+
+ <!-- One or more bullet points for how to test that the feature works as expected. -->
+- Go in Site Kit settings, Admin Settings and reset the plugin by clicking the ""Reset Site Kit""
+- You will be redirected to the splash screen where it should match the designs.
+- If featureFlags.userInput is false, then the walking person icon should not show up. This means that the new UI should only show up in the development version of the plugin and the UI should remain unchanged on the production version.
+
+## Changelog entry
+
+* Implement UI for new splash screen based on authentication service improvements.
+","Update splash UI when featureFlags.userInput is enabled.
+Merge branch 'develop' into feature/2046-splash-ui.
+Change the way the walking person SVG image is loaded.
+Update e2e tests for splash screen.
+Update e2e tests for CTA label.
+Merge branch 'develop' into feature/2046-splash-ui
+Merge branch 'develop' into feature/2046-splash-ui.
+Remove constant in favour of using the string directly in the markup.
+Merge branch 'feature/2046-splash-ui' of github.com:google/site-kit-wp into feature/2046-splash-ui.
+Merge branch 'develop' into feature/2046-splash-ui.
+Merge branch 'develop' into feature/2046-splash-ui.
+Move new setup class names from _googlesitekit-wizard-progress to _googlesitekit-setup SASS file.
+Merge branch 'feature/2046-splash-ui' of github.com:google/site-kit-wp into feature/2046-splash-ui.
+Merge branch 'develop' into feature/2046-splash-ui"
+"## Bug Description
+
+Any links that open in a new tab should be marked with an ""external link"" icon (which mostly is the case now already), but also with a screen reader-only text that says ""(opens in a new tab)"". Related: #1684 
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+
+* All external links in Site Kit should be annotated with an `aria-label` attribute containing `_x( '(opens in a new tab)', 'screen reader text', 'google-site-kit' )`
+	* An external link that receives an `aria-label` attribute should have the new tab text appended to it
+	* An external link that does not receive a `aria-label` attribute and has string `children` should append the new tab text to the `children` for the `aria-label` attribute
+* Any existing links that use the `<span class=""screen-reader-text"">` element in the children to truncate the link text between visible and hidden portions should be updated to use separate translation strings where the full version is used as the `aria-label` and previously truncated version as the children
+
+## Implementation Brief
+
+* Update `assets/js/components/link.js` to set an `aria-label` attribute based on the logic in the AC
+* Update usage of `Link` component with `<span class=""screen-reader-text"">` to use an `aria-label` attribute instead
+
+<details>
+<summary>Original IB</summary>
+
+In the `link (https://github.com/google/site-kit-wp/blob/develop/assets/js/components/link.js)` component (`assets/js/components/link.js`):
+
+- Add the following WordPress dependencies:
+  - `import { _x } from '@wordpress/i18n';`
+  - `import { VisuallyHidden } from '@wordpress/components';`
+
+- In the render function, after outputting the { children } , conditionally display the ""(opens in a new tab)"" string. 
+`
+{ external && (
+					<VisuallyHidden as=""span"" className=""screen-reader-text"">
+						{ _x( '(opens in a new tab)', 'screen reader text', 'google-site-kit' ) }
+					</VisuallyHidden>
+				) }
+`
+
+</details>
+
+## QA Brief
+- Inspect any external link using Chrome devtools. They are easily recognisable by having the external icons.
+- The anchor tag should have the aria-label attribute with the value of the text within the link and the following text: ""(opens in a new tab)""
+- No visual regressions should be noted.
+
+## Changelog entry
+
+* Fix accessibility issue with links opening in a new tab by annotating them with screen reader text informing about it.
+","Add accessibility annotation for external links.
+Use VisuallyHidden from @wordpress/components instead of hardcoding span.
+Merge branch 'develop' into enhancement/2093-accessibility-label.
+Merge branch 'develop' into enhancement/2093-accessibility-label.
+Remove the use of Gutenberg's VisuallyHidden component in favour of span tag with screen-reader-text class name.
+Merge branch 'develop' into enhancement/2093-accessibility-label
+Merge branch 'develop' into enhancement/2093-accessibility-label.
+Merge branch 'enhancement/2093-accessibility-label' of github.com:google/site-kit-wp into enhancement/2093-accessibility-label.
+Add missing whitepace.
+Avoid the use of dangerouslySetInnerHTML in the Link component.
+Merge branch 'develop' into enhancement/2093-accessibility-label.
+Merge branch 'develop' into enhancement/2093-accessibility-label.
+Merge branch 'develop' into enhancement/2093-accessibility-label.
+Use createInterpolateElement to translatable strings.
+Use aria-label instead of screen-reader-text span.
+Merge branch 'develop' into enhancement/2093-accessibility-label.
+Use children props and spreading the values from helperCTA function call.
+Merge branch 'develop' into enhancement/2093-accessibility-label
+Refactor condition to render aria-label.
+Merge branch 'enhancement/2093-accessibility-label' of github.com:google/site-kit-wp into enhancement/2093-accessibility-label.
+Use aria-label as prop instead of ariaLabel.
+Merge branch 'develop' into enhancement/2093-accessibility-label
+Merge remote-tracking branch 'origin/develop' into enhancement/2093-accessibility-label.
+Only append new tab text if there is a non-empty label.
+Add Link component tests for aria-label handling.
+Merge branch 'develop' into enhancement/2093-accessibility-label"
+"## Feature Description
+
+Create the Info Notice widget component and add it to Storybook. It should display a static message, the full message sequence will be added separately via https://github.com/google/site-kit-wp/issues/8139.
+
+See [info notice](https://docs.google.com/document/d/1MGD5Djy6AeeZC4zBtHqS-lQEWD9jw0kf-IIWw-jLCFU/edit#heading=h.8f364rk7fiu0) in the design doc.
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+* The InfoNotice component should be added along with its stories and styled as per [the designs](https://docs.google.com/document/d/1MGD5Djy6AeeZC4zBtHqS-lQEWD9jw0kf-IIWw-jLCFU/edit#heading=h.8f364rk7fiu0).
+* It should have at least the following properties:
+	* icon
+	* notice
+	* ctaLabel
+	* ctaOnClick
+
+## Implementation Brief
+
+* [ ] Add `assets/js/modules/analytics-4/components/common/AudienceSegmentation/infoNotice.js`
+  * [ ] Define following props:
+    * `content` - Main text, it should be output within `p` tag
+    *  `dismissLabel` - A CTA label
+    * `onDismiss` - Optional callback that will be invoked when button is clicked 
+  * [ ] Wrap the output in main `div` with class, say `googlesitekit-audience-segmentation-info-notice`
+  * [ ] Include the SVG icon from figma
+  * [ ] Add `Button` component with `tertiary` prop, and use `dismissLabel` for button text
+    * [ ] `onClick` should invoke a passed `onDismiss` callback function
+* [ ] Add `assets/sass/components/analytics-4/audience-segmentation/info-notice.scss` and apply styling to match the [figma design](https://www.figma.com/file/7pSrkEy8t00BcYRAi9LjjH/Audience-Segmentation?type=design&node-id=1261-8985&mode=design&t=XexJDRrm7CE9vJVs-0)
+   
+
+### Test Coverage
+
+* Add tests and stories for `InfoNotice` component. Use the content from referenced figma design for the component in stories
+
+## QA Brief
+
+* The component is not yet used on in the plugins, so can't be tested in the plugin ifself.
+* Verify component in Storybook matches Figma https://google.github.io/site-kit-wp/storybook/pull/8388/?path=/story/modules-analytics4-components-audiencesegmentation-infonotice--default
+* Verify the visual regression reference images on the PR match the design in figma.
+
+## Changelog entry
+
+* Add the Audience Segmentation Info Notice as a component in Storybook.
+","Add AudienceSegmentation InfoNotice component.
+Rename AudienceSegmentation InfoNotice story filename.
+Add tests to AudienceSegmentation InfoNotice component.
+Add VRT reference images.
+Add temporary jest test fix to satisy presence of AudienceSegmentation folder.
+Reduce mobile passing for InfoNotice.
+Move InfoNotice component to dashboard folder.
+Update VRT reference images."
+"## Feature Description
+
+As part of the new `Ads` module work being implemented, new Site Health checks are required to be added. These Site Health checks will be present in the `Site Health > Info` section, and appear within the `Site Kit by Google` health check group.
+
+Checks will include the following:
+* Display of the `Ads Conversion ID` field value
+* An indication of whether the Ads Conversion ID script is being rendered/output on the site
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+
+* The following Site Health checks will appear within the `Site Health > Info` section, and appear within the `Site Kit by Google` health check group:
+    * Output of the currently store Ads Conversion ID field value
+    * Indication of whether the Ads Conversion ID snippet is being rendered on the frontend
+
+## Implementation Brief
+
+* [x] Add `includes/Modules/Ads/Tag_Matchers.php`
+  * Use `includes/Modules/AdSense/Tag_Matchers.php` as a starting point.
+  * Modify the regex array to match the ads code pattern, which is added in the gtag as `gtag('config','AW-12345')`. Ads conversion ID will always start with `AW-`
+* [x] Update `Google\Site_Kit\Modules\Ads` class:
+  * Class should implement `Module_With_Debug_Fields` and `Module_With_Tag` interfaces
+  * It should use `Module_With_Tag_Trait` trait
+  * Add `get_debug_fields` method, it should output `adsConversionID` setting. You can see the example of implementation in any other module, for example `Google\Site_Kit\Modules\AdSense::get_debug_fields`
+  * Add `get_tag_matchers` method, which should return the new Ads module `Tag_Matchers` class
+
+### Test Coverage
+
+* Update `tests/phpunit/integration/Modules/AdsTest.php`, to include test case for`get_debug_fields`
+
+## QA Brief
+* Enable the `adsModule` feature flag and connect the Ads module in the SK settings.
+* Add the Conversion ID to both the Ads module settings and the Analytics 4 settings.
+* Enable the Ads tag placement.
+* Go to `Tools > Site Health`, select the `Info` tab and open the `Site Kit by Google` accordion
+   * Check the Ads Conversion ID is shown
+* Go to `Tools > Site Health`, then click `Passed Tests` and expand the `Tag Placement` accordion
+   * Check the Tag Placement is shown. It will currently show: ""Tag detected but could not verify that Site Kit placed the tag."" because the Analytics module owns the tag not the Ads module. 
+
+## Changelog entry
+
+* <!-- One sentence summarizing the PR, to be used in the changelog. -->
+","Add site health checks for Ads module.
+Simplify get_debug_fields and fix test.
+Update namespaces and fix tests.
+Update includes/Modules/Ads/Tag_Matchers.php
+Update comments for empty register_tag method."
+"## Feature Description
+
+When the widgets in a widget area are combined due to all being in the `ReportError` state, it's necessary to individually retry for each of the errors, which is a bit of a confusing user experience as can be seen in the screen capture below.
+
+It would be a UX improvement if the combined Retry button would retry all of the underlying errored selectors.
+
+The Tweak Chrome extension is being used here to simulate an error for all Analytics report requests.
+
+https://user-images.githubusercontent.com/18395600/212390610-c08d5b41-3614-4faa-b30e-7e736957e00e.mp4
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+
+* On the `DashboardAllTrafficWidgetGA4`, if multiple errors occur, all retryable error should be retried, when clicking the ""Retry"" button on the combined error message.
+
+## Implementation Brief
+
+* [x] Update `assets/js/modules/analytics/components/dashboard/DashboardAllTrafficWidgetGA4/index.js` grouping the retryable errors from each section of the widget:
+```
+	const retryableErrors = [
+		pieChartError,
+		totalUsersError,
+		userCountGraphError,
+	].filter( Boolean );
+```
+* [x] Update `assets/js/modules/analytics/components/dashboard/DashboardAllTrafficWidgetGA4/index.js` to pass the new grouped errors to the errors prop of the `WidgetReportError`.
+
+### Test Coverage
+
+* No additional coverage.
+
+## QA Brief
+
+* Follow the instructions in the ticket description/video and confirm that retrying the Dashboard All Traffic Widget error retries all reports for that widget.
+*Note: since the issue was reported the widget has been updated to use the `analytics-4` module so the URL pattern in the tweak extension should be updated to: `.*/wp-json/google-site-kit/v1/modules/analytics-4/data/report?.*`*
+
+## Changelog entry
+
+* <!-- One sentence summarizing the PR, to be used in the changelog. -->
+",Combine errors in dashboard all traffic widget.
+"## Feature Description
+
+Implement the variant of the `SpinnerButton` component which optionally shows the spinner on the left-hand side of the button, required for the Audience Creation in progress state.
+
+See [audience creation > in progress state](https://docs.google.com/document/d/1MGD5Djy6AeeZC4zBtHqS-lQEWD9jw0kf-IIWw-jLCFU/edit#heading=h.2qyoym3f3quh) in the design doc.
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+
+* A new prop of type boolean should be added to the `SpinnerButton` component which should indicate the position of the spinning icon.
+* Based on the value of the above prop, the `trailingIcon` (spinner to the right of the button label) or `icon` (spinner to the left of the button label) prop should be set accordingly for the `Button` component within `SpinnerButton`.
+
+## Implementation Brief
+
+* [x] Update `assets/js/googlesitekit/components-gm2/SpinnerButton.js`:
+  * [x] Introduce a new prop, say `leftHanded`, it should be of type `boolean`
+  * [x] Add `icon` prop to the `Button` component
+    * [x] Conditionally render `<CircularProgress size={ 14 } />` in it, based on `leftHanded`
+  * [x] Update https://github.com/google/site-kit-wp/blob/49c312cf8b54f93bce33cc467b7bfad2f48d235f/assets/js/googlesitekit/components-gm2/SpinnerButton.js#L47 condition, to check for `leftHanded` as well. Render only when `leftHanded` is not passed
+
+### Test Coverage
+
+* Add new variation story to the `assets/js/googlesitekit/components-gm2/SpinnerButton.stories.js`
+
+## QA Brief
+
+* Check the left variant of the Spinner Button in the storybook. 
+
+## Changelog entry
+
+* <!-- One sentence summarizing the PR, to be used in the changelog. -->
+","Add a variant of SpinnerButton where the spinner is on left.
+Add story for new variant.
+Update styles for SpinnerButton to account for new variant.
+Simplify styling logic.
+Revert ""Simplify styling logic.""
+
+This reverts commit 3bd44fd048280c67f8f318e2f72f1a8a579e51f2.
+Merge branch 'develop' into enhance/8163-spinnerbutton-left-variant.
+Update test snapshots.
+Replace explicit direction with direction aware properties.
+Update snapshots."
+"## Feature Description
+
+This issue will track the progress of the newly created [feature branch](https://github.com/google/site-kit-wp/tree/feature/singular-analytics-module) for the final SAM issues (#7932, #8082 and  #7843). Since the PRs of these individual issues should be merged into develop/main at the same time, we have decided to merge them into the feature branch instead. Also, the individual PRs are very large and the code within them is not wrapped with any feature flag. So the feature branch and this issue will help us to thoroughly QA the feature branch that will effectively be merged into develop and ""launch"" SAM in Release 1.123.0.
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+
+* Successfully remove and replace the old Analytics module with the Analytics-4 module (SAM epic). As such, the ACs of the following 3 issues should be met:
+  * #7932 
+  * #8082
+  * #7843 
+
+## Implementation Brief
+
+* [ ] Thoroughly QA and merge the [feature branch](https://github.com/google/site-kit-wp/tree/feature/singular-analytics-module) once all the PRs of the issues within the AC have been merged.
+
+### Test Coverage
+
+* No new tests required.
+
+## QA Brief
+
+* Refer to the QAB of the individual issues in the ACs. A test plan is also being created to thoroughly test the Google Analytics module within the Site Kit plugin. Any specific scenarios or test cases can be added here but should be included in that test plan for the QA team to go through.
+
+## Changelog entry
+
+* <!-- One sentence summarizing the PR, to be used in the changelog. -->
+","Fix merge conflicts.
+Remove User_Options.
+Refactor class and tests.
+Clean unused code.
+Minor improvements.
+Update MODULES_ANALYTICS store to MODULES_ANALYTICS_4 and imports.
+Move parseDimensionStringToDate to analytics-4.
+Move parseDimensionStringToDate utility.
+Move __factories__.
+Replace user facing Analytics 4 to Analytics.
+Update module slug.
+Move DashboardAllTrafficWidgetGA4 to analytics-4.
+Move Dashboard widget constants to analytics-4.
+Move DashboardOverallPageMetricsWidgetGA4 to analytics-4.
+Move ModulePopularPagesWidgetGA4 to analytics-4.
+Move ZeroDataMessage to analytics-4.
+Register dashboard and module widgets in analytics-4.
+Remove registerWidgets in analytics.
+Update module slug to analytics-4.
+Remove fetch modules in submitChanges.
+Move Modules/Analytics/ stories to Modules/Analytics4/.
+Fix failing tests and remove unnecessary test.
+Change Analytics to Analytics 4 on the Modules.
+Update Analytics 4 class to act as the core module.
+Fix `analytics-4` connection logic.
+Fix component still referencing legacy store.
+Add @since annotation.
+Exclude modules/analytics from jest tests.
+Add features property to registerModule.
+Fix dimension name."
+"## Feature Description
+
+At present, when Consent Mode setup CTA banner introduced via https://github.com/google/site-kit-wp/issues/8279 is dismissed for the third and last time, its Settings tooltip is not displayed.
+
+So, after two dismissals the banner is shown with the ""Don't show again"" dismissal CTA label.
+![image](https://github.com/google/site-kit-wp/assets/18395600/9b71dc03-56bd-4af4-9b13-c1aa17383fee)
+
+Clicking it _should_ show this Settings tooltip, but it doesn't appear.
+![image](https://github.com/google/site-kit-wp/assets/18395600/9d21abee-a555-4cb6-85a3-8740b63da3f6)
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+
+* When Consent Mode setup CTA banner is dismissed for the third and last time, its Settings tooltip should be displayed.
+
+## Implementation Brief
+
+* [ ] Move this call to `showTooltip()` out of the conditional block that it's in, i.e. move it to the line above the `if` statement.
+https://github.com/google/site-kit-wp/blob/e6b528018ab63cbb482f4a7a3aa904664f3d2a45/assets/js/components/consent-mode/ConsentModeSetupCTAWidget.js#L206-L208
+
+### Test Coverage
+
+* No new tests needed.
+
+## QA Brief
+
+### QA:Eng
+
+* Modfiy the value of `expiresInSeconds` to be something testable e.g. 60 seconds.
+
+https://github.com/google/site-kit-wp/blob/26e6a4318b09e47796fa5c02adf263ab756cb383/assets/js/components/consent-mode/ConsentModeSetupCTAWidget.js#L211-L213
+
+* Ensure the Consent Mode `enabled` setting is `false` and an Ads Conversion ID is set to ensure the banner is shown.
+* Dismiss the banner twice, waiting for the updated `expiresInSeconds` duration between dismissals.
+* Dismiss the banner a third time and verify the Settings tooltip is shown on the third dismissal.
+* This issue also applies the same fix to the Ad Blocking Recovery Setup CTA widget. Follow the QAB for https://github.com/google/site-kit-wp/issues/7316 and ensure the Settings tooltip is shown after the third dismissal of this widget.
+
+## Changelog entry
+
+* N/A
+","Ensure the Settings tooltip is shown for the final ConsentModeSetupCTAWidget dismissal.
+Ensure the Settings tooltip is shown for the last AdBlockingRecoverySetupCTAWidget dismissal."
+"## Feature Description
+
+In https://github.com/google/site-kit-wp/issues/2087 we introduced a simple API for implementing manual disabling of tags based for web and AMP. AMP has built-in support for blocking elements based on consent, so a manual approach was adopted for web tags.
+
+With consent mode, this should be deprecated to encourage site owners to use consent mode instead.
+
+**This should only take effect when the `consentMode` feature is enabled.**
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+
+* ~The existent manual disabling of the web tag should be retained for Analytics but only activated when Consent Mode is disabled.~
+
+Please note that the AC for this issue has been updated as follows:
+
+* Usage of the `googlesitekit_analytics-4_tag_block_on_consent` filter should be deprecated.
+* When a hook is run for this filter, a deprecation warning should be logged to the debug log.
+* Aside from the deprecation warning, the legacy manual disabling of the web tag should still function as usual.
+
+## Implementation Brief
+
+* [x] Extract this block of code that disables the web tag into a new method.
+https://github.com/google/site-kit-wp/blob/28780f2a4a3502573d513eb1a82a931284b874fd/includes/Modules/Analytics_4/Web_Tag.php#L161-L176
+* [x] Mark the new method as deprecated via a calls to `_deprecated_function()`.
+* [x] Conditionally invoke the method when the Consent Mode `enabled` setting is `false`.
+
+### Test Coverage
+
+* Provide PHPUnit test coverage for the above changes.
+
+## QA Brief
+
+### QA:Eng
+
+- Copy the following PHP snippet to a new `.php` file in `wp-content/mu-plugins/` to enable legacy tag blocking:
+```php
+<?php
+add_filter( 'googlesitekit_analytics-4_tag_block_on_consent', '__return_true' );
+```
+- Look for the `type=""text/plain"" data-block-on-consent` attributes on the GTag script to confirm legacy tag blocking is enabled:
+```html
+<!-- Google Analytics snippet added by Site Kit -->
+<script type=""text/plain"" data-block-on-consent src='https://www.googletagmanager.com/gtag/js?id=GT-ABC123' id='google_gtagjs-js' async></script>
+```
+- Verify that a warning is raised when the deprecated filter `googlesitekit_analytics-4_tag_block_on_consent` is used, while other `googlesitekit_{module_slug}_tag_block_on_consent` filters don't raise a warning.
+- Ensure the behaviour related to the above filters still works as expected.
+
+## Changelog entry
+
+* Deprecate legacy web tag block_on_consent for Analytics when Consent Mode is enabled.
+","Remove the _deprecated_function() call from add_legacy_block_on_consent_attributes().
+Fix test.
+Remove unused is_consent_mode_enabled property.
+Remove deprecated annotations from GA4 Web_Tag."
+"## Feature Description
+
+Currently, the Top Earning Content Key Metric Tile (#6248) and the Top Earning Pages widget with GA4 data (#8059) do _not_ filter out non-AdSense revenue. As discussed with @marrrmarrr in Slack (https://10up.slack.com/archives/CFFRMC5DE/p1708363912766809?thread_ts=1708361122.867059&cid=CFFRMC5DE), both these components' reports should filter out any data that does not include revenue sourced from AdSense.
+
+The report data can be [filtered by AdSense `accountID`](https://10up.slack.com/archives/CBKKQEBR9/p1708348963677589?thread_ts=1708348556.944389&cid=CBKKQEBR9) to ensure only AdSense data is shown in Site Kit.
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+
+* Report data from Top Earning Content Key Metric Tile (#6248) and the Top Earning Pages widget with GA4 data (#8059) should only include revenue from the user's connected/linked AdSense account, and not from any other sources.
+
+## Implementation Brief
+
+* [x] In `assets/js/modules/adsense/components/dashboard/DashboardTopEarningPagesWidgetGA4.js` and `assets/js/modules/adsense/components/widgets/TopEarningContentWidget.js`:
+    * [x] Get the `adsenseAccountID` using the `getAccountID` selector of AdSense module. 
+    * [x] In the report arg:
+        * [x] Add `adSourceName` to the list of dimensions. 
+        * [x] Add `dimensionFilter` with the following Object to filter results by the `adsenseAccountID`
+```js
+{
+  filter: {
+    fieldName: 'adSourceName',
+    stringFilter: {
+      matchType: 'EXACT',
+      value: `Google AdSense account (${ adsenseAccountID })`,
+    },
+  },
+}
+```
+* [x]  In `includes/Modules/AdSense/Settings.php`:
+    * [x] Implement `Setting_With_ViewOnly_Keys_Interface` to the `Setting` class to expose `accountID` in view-only context. 
+
+### Test Coverage
+
+* Update stories for both Widget to continue functioning properly. 
+
+## QA Brief
+
+* [ ] Enable the `ga4AdSenseIntegration` feature flag
+* [ ] Simulate linking your AdSense and Analytics account by updating the `adSenseLinked` setting in the store (this will allow you to QA this ticket before #8049 is merged).
+*You can achieve this by running the following the developer console:*
+```
+googlesitekit.data.dispatch('modules/analytics-4').setAdSenseLinked(true)
+```
+* [ ] Enable key metric widgets, and enable the ""Top earning content"" widget. Results from your site, if available, should appear in the widget.
+* [ ] Earnings should exclude earnings from sources other than the AdSense account ID connected to SiteKit.
+* [ ] The top earning pages key metric tile and dashboard widget should be viewable on the View Only dashboard if Adsense and Analytics modules are shared and the `adSenseLinked` setting is true (this can be simulated in view only mode as above).
+
+When the `ga4AdSenseIntegration` feature flag is disabled, this KMW tile should not appear.
+
+## Changelog entry
+
+* Update Top Earning Content/Pages widgets to only show ad revenue from AdSense.
+",Remove pageTitle from top earnings report dimensions.
+"## Feature Description
+
+We currently have two different implementations of a button with a spinner:
+
+- A button and separate external spinner (using the spinner graphic provided in WP core)
+- A button with an internal spinner, using a material circular progress animation
+
+The latter should be used on plugin screens going forward.
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+
+* All instances of a button with a spinner which is displayed while its respective action is in progress should be updated to use the button with the internal material circular progress spinner
+
+## Implementation Brief
+* Refactor usage of the `Spinner` component within the `Button` component to use the `SpinnerButton` component instead, which accepts the same props as `Button`.
+    * No `Spinner` within `Button` should be used or `Spinner` next to the `Button` element.
+* Non exhaustive list of components to be updated:
+    * `assets/js/components/dashboard-sharing/DashboardSharingDialog/Footer/index.js`
+        * Update the reset button to use `SpinnerButton` and remove usage of `Spinner`.
+    * `assets/js/components/notifications/BannerNotification/index.js`
+        * Replace `Button` having the class name `googlesitekit-notification__cta` by `SpinnerButton` and remove usage of `Spinner` component.
+    * `assets/js/components/settings/SettingsActiveModule/Footer.js`
+        * Replace both `Button` by `SpinnerButton`
+    * `assets/js/googlesitekit/components-gm2/Dialog.js`
+    * `assets/js/modules/pagespeed-insights/components/dashboard/DashboardPageSpeed.js`
+* For above components review any CSS which were added to position the spinner next to the button when the `Button` and `Spinner` components were side by side or `Spinner` as a child of `Button`.
+
+### Test Coverage
+* Tests might need to be updated to cater for above changes.
+
+## QA Brief
+
+* Check and make sure the button with spinner works as expected in the following places:
+    * DashboardSharing Settings
+    * Module Recovery Alert
+    * Module Settings     
+    * Notifications 
+    * Error Notifications 
+    * etc. 
+
+## Changelog entry
+
+* Update all spinner buttons to be consistent across the codebase.
+","Refactor instances of buttons with spinner with SpinnerButton component.
+Update jest snapshots.
+Revert GM2 Dialog changes.
+Update secondary cta link left margin.
+Remove Spinner usage from GM2 Dialog component without using SpinnerButton.
+
+Due to how the `googlesitekit-componenys` is resolved, directly using SpinnerButton here causes incorrect resolution and errors.
+Revert accidental Close button change.
+Move SpinnerButton to component package.
+Add SpinnerButton GM3 plaholder component.
+Export SpinnerButton from entrypoint.
+Update SpinnerButton imports.
+Remove old SpinnerButton.
+Update component entrypoints.
+Remove invalid leftover prop.
+Use SpinnerButton in Dialog.
+Cleanup dialog component."
+"## Feature Description
+
+<!-- Please describe clear and concisely which problem the feature would solve or which publisher needs it would address. -->
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+
+* A new component `WPDashboardSessionDurationGA4` should be created based on the existing `WPDashboardSessionDuration`
+* The component should source its report data from the `analytics-4` store
+	* [See here for a table of equivalent metrics for GA4](https://docs.google.com/document/d/17RKIrdm5PBK8j6rP0GV_2QlztSLXqYQX8ikz3kQmrAo/edit?resourcekey=0-njOU7bn1dhvi5Yp2jeX5zw#bookmark=id.2cvsdbn818e6)
+* No changes should be made in the dashboard yet
+* Storybook stories should be added to cover the following cases (with and without a current entity URL set: [example](https://google.github.io/site-kit-wp/storybook/develop/?path=/story/modules-analytics-widgets-dashboardoverallpagemetricswidget--ready)):
+    * Loading
+    * Gathering data (""Data unavailable"")
+    * Zero data (data available but metric is `0`) 
+    * Error
+    * Ready (data available and non-zero)
+
+## Implementation Brief
+* Once #6173 and #6174 have been merged.
+* Copy `assets/js/components/wp-dashboard/WPDashboardSessionDuration.js` to `assets/js/components/wp-dashboard/WPDashboardSessionDurationGA4.js` with the following updates:
+    * The `WPDashboardSessionDurationGA4` component should be exported.
+    * Replace occurrences of the Analytics data store (`MODULES_ANALYTICS`) by the GA4 Analytics data store (`MODULES_ANALYTICS_4`).
+    * Replace the metrics and dimensions by their GA4 counterparts [as per the doc here](https://docs.google.com/document/d/17RKIrdm5PBK8j6rP0GV_2QlztSLXqYQX8ikz3kQmrAo/edit?resourcekey=0-njOU7bn1dhvi5Yp2jeX5zw#bookmark=id.2cvsdbn818e6) and the [migration guide here](https://developers.google.com/analytics/devguides/migration/api/reporting-ua-to-ga4-dims-mets), including the metric names.
+* Stories should be within `assets/js/components/wp-dashboard/WPDashboardSessionDurationGA4.stories.js` and make use of the Analytics 4 response mock data added from #6174
+        * Refer to the AC for the different stories to be added.
+
+### Test Coverage
+* No new tests to be added.
+
+## QA Brief
+
+* This is currently only testable in Storybook.
+* Check the stories under **VIEWS > WPDashboardApp > WPDashboardSessionDurationGA4**. These should be broadly in line with the existing UA version under **VIEWS > WPDashboardApp > WPDashboardSessionDuration**, except with the following additional stories:
+	* `Loading`
+	* `Error`
+* [PR Storybook](https://google.github.io/site-kit-wp/storybook/pull/6640/?path=/story/views-wpdashboardapp-wpdashboardsessiondurationga4--ready) (will be deleted when merged to `develop`).
+* [`develop` Storybook](https://google.github.io/site-kit-wp/storybook/develop/?path=/story/views-wpdashboardapp-wpdashboardsessiondurationga4--ready).
+* [`main` Storybook](https://google.github.io/site-kit-wp/storybook/main/?path=/story/views-wpdashboardapp-wpdashboardsessiondurationga4--ready).
+
+### Screenshots
+
+<img width=""661"" alt=""Screenshot 2023-02-24 at 5 33 32 PM"" src=""https://user-images.githubusercontent.com/24408261/221174910-32cc954f-bd2b-42b1-9de9-9e77a5877989.png"">
+<img width=""661"" alt=""Screenshot 2023-02-24 at 5 33 38 PM"" src=""https://user-images.githubusercontent.com/24408261/221174906-d6b99716-6e4d-45e0-ac4d-3ca984ea8ded.png"">
+<img width=""661"" alt=""Screenshot 2023-02-24 at 5 33 45 PM"" src=""https://user-images.githubusercontent.com/24408261/221174904-44463315-8510-4be7-b76f-7431aa168219.png"">
+<img width=""661"" alt=""Screenshot 2023-02-24 at 5 33 50 PM"" src=""https://user-images.githubusercontent.com/24408261/221174897-7e759233-b80f-42c9-80e2-20f96e6f468d.png"">
+<img width=""661"" alt=""Screenshot 2023-02-24 at 5 33 57 PM"" src=""https://user-images.githubusercontent.com/24408261/221174886-8be32121-9825-482e-8ff6-e9013b3a1c4b.png"">
+
+
+## Changelog entry
+
+* Create a Google Analytics 4 alternative for the session duration widget on the WordPress dashboard page.
+","Add WPDashboardSessionDurationGA4 component.
+Add WPDashboardSessionDurationGA4 stories.
+Add mock sessions data for args.
+Add analytics-4 module in the registry.
+Merge branch 'develop' of github.com:google/site-kit-wp into enhance/#6213-ga4-wp-dashboard-session-duration.
+Merge branch 'develop' of github.com:google/site-kit-wp into enhance/#6213-ga4-wp-dashboard-session-duration."
+"## Feature Description
+
+This issue maps the default metrics to show based on an authenticated admin's response to the first user input question.
+
+A partial store within `core/widgets`, say `key-metrics` should have a new selector, say `getAnswerBasedMetrics()` which would check the current user input setting for the response to the first question (using the `user-input-settings` partial store within `core/user`) and return the appropriate 4 core metrics which should be displayed.
+
+Refer to the [relevant section](https://docs.google.com/document/d/1k8NOo2xEHUQAcgYG0TB5sUjGcPiC8SWIalEdd9G8-9g/edit#heading=h.zc9k0id36g3e) in the design doc for further context.
+
+---------------
+
+_Do not alter or remove anything below. The following sections will be managed by moderators only._
+
+## Acceptance criteria
+
+* A new partial store within `core/widgets`, `key-metrics` should have a new selector, `getAnswerBasedMetrics()`.
+* The selector should check the response to the first question in the user input questionnaire using `getUserInputSettings` from the `user-input-settings` partial store within `core/user`.
+* It should return an object of widget slug strings for the widgets defined in [this table in the design doc](https://docs.google.com/document/d/1k8NOo2xEHUQAcgYG0TB5sUjGcPiC8SWIalEdd9G8-9g/edit#heading=h.78crkrvn0m7t).
+* The widgets slugs returned should be mapped as follows:
+    - If answer is `publish_blog` or `publish_news`:
+        - `kmAnalyticsLoyalVisitors` 
+        - `kmAnalyticsNewVisitors`
+        - `kmAnalyticsTopTrafficSource`
+        - `kmAnalyticsEngagedTrafficSource`
+    - If answer is `monetize_content`:
+        - `kmAnalyticsPopularContent`
+        - `kmAnalyticsEngagedTrafficSource`
+        - `kmAnalyticsNewVisitors`
+        - `kmAnalyticsTopTrafficSource`
+    - If answer is `sell_products_or_service`:
+        - If the site has a `post_type` defined as ""product"", then show `kmTopPopularProducts`. Else show `kmAnalyticsPopularContent`.
+        - `kmAnalyticsEngagedTrafficSource`
+        - `kmSearchConsolePopularKeywords`
+        - `kmAnalyticsTopTrafficSource`
+    - If answer is `share_portfolio`:
+        - `kmAnalyticsNewVisitors`
+        - `kmAnalyticsTopTrafficSource`
+        - `kmAnalyticsEngagedTrafficSource`
+        - `kmSearchConsolePopularKeywords`
+
+## Implementation Brief
+* Create `assets/js/googlesitekit/widgets/datastore/key-metrics.js` which only contains the `getAnswerBasedMetrics` selector and only `selectors` should be exported. (Refer to other data store partials for the structure).
+* Within `getAnswerBasedMetrics`,
+    * Get the filled in user input questionnaire answers by querying the `core/user` data store via the `getUserInputSettings` selector.
+    * Grab the answers for the `purpose` question (which is the first question) and return the widget slugs as per the AC.
+        * To check whether the site has the ""product"" post type, query the `core/site` data store via the `getPostTypes` selector and check whether there is a post type with the `slug` set to `product`.
+
+### Test Coverage
+* Add tests for the `getAnswerBasedMetrics` selector.
+
+## QA Brief
+
+- Install Site Kit and enable the `userInput` feature flag.
+- Set the value of the `purpose` answer by running through the User Input setup flow.
+  - Navigate to `/wp-admin/admin.php?page=googlesitekit-user-input&question=purpose` to begin the flow.
+- For each of the widget slugs mentioned in the AC:
+  - Choose the corresponding answer, and continue through the User Settings setup until they are saved.
+  - Call the `getAnswerBasedMetrics()` selector from the JS console as follows.
+  - Verify the returned set of Key Metric widget slugs matches the definition in the AC.
+  - Note, in order to test `sell_products_or_service`, an easy way to ensure the `product` post type is created is to install the Woo Commerce plugin. It only needs to be activated and not configured.
+  - When the `other` slug is chosen, the selector should return an empty array.
+```js
+googlesitekit.data.select('core/widgets').getAnswerBasedMetrics();
+```
+
+## Changelog entry
+
+* Add the  `getAnswerBasedMetrics` selector to the widgets datastore.
+","Return correct metrics for `sell_products_or_service` with `product` post type.
+Revert unintentionl test name change."
